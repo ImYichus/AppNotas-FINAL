@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AppNotas</string>
+
+    <string name="nav_notes">Notes</string>
+    <string name="nav_pending">Pending</string>
+
+    <string name="title_pending">Pending</string>
+    <string name="no_tasks_message">No tasks</string>
+
+    <string name="button_add">Add</string>
+    <string name="button_save">Save</string>
+</resources>
