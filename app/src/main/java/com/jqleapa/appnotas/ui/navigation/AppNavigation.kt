@@ -17,7 +17,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.jqleapa.appnotas.ui.screens.AddNoteScreen
 import com.jqleapa.appnotas.ui.screens.GalleryScreen
 import com.jqleapa.appnotas.ui.screens.ReminderScreen
 import com.jqleapa.appnotas.ui.screens.SearchScreen
@@ -30,6 +29,7 @@ import com.jqlqapa.appnotas.ui.screens.NoteDetailScreen
 
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModel
 import com.jqlqapa.appnotas.data.NoteRepository
+import com.jqlqapa.appnotas.ui.screens.AddNoteScreen
 import com.jqlqapa.appnotas.ui.viewmodel.AddEditViewModelFactory
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModelFactory
 
