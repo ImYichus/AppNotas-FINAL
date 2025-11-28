@@ -43,4 +43,15 @@ interface NoteDao {
     @Transaction
     @Query("SELECT * FROM notes WHERE id = :id")
     fun getNoteWithDetails(id: Long): Flow<NoteWithMediaAndReminders>
+
+    // ... (otros métodos)
+
+    // NUEVOS MÉTODOS PARA EL HOME (Con detalles)
+    @Transaction
+    @Query("SELECT * FROM notes WHERE isTask = 0 ORDER BY registrationDate DESC")
+    fun getNotesWithDetails(): Flow<List<NoteWithMediaAndReminders>>
+
+    @Transaction
+    @Query("SELECT * FROM notes WHERE isTask = 1 ORDER BY taskDueDate ASC")
+    fun getTasksWithDetails(): Flow<List<NoteWithMediaAndReminders>>
 }

@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,6 +36,7 @@ import com.jqlqapa.appnotas.ui.components.AudioRecorderDialog
 import com.jqlqapa.appnotas.ui.components.MediaPlayerDialog
 import com.jqlqapa.appnotas.ui.viewmodel.AddEditNoteViewModel
 import com.jqlqapa.appnotas.ui.viewmodel.MediaItem
+import com.jqlqapa.appnotas.ui.viewmodel.ReminderItem
 import com.jqlqapa.appnotas.utils.AndroidAudioRecorder
 import com.jqlqapa.appnotas.utils.FILE_PROVIDER_AUTHORITY
 import java.io.File
@@ -50,41 +52,34 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // Estados UI
+    // --- ESTADOS UI ---
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+
+    // Gestión de Recordatorios
+    var showReminderOptionsDialog by remember { mutableStateOf<ReminderItem?>(null) }
+    var isEditingReminder by remember { mutableStateOf(false) }
+    var reminderBeingEdited by remember { mutableStateOf<ReminderItem?>(null) }
+
+    // Multimedia y Permisos
     var showAudioRecorderDialog by remember { mutableStateOf(false) }
     var mediaToPlay by remember { mutableStateOf<MediaItem?>(null) }
-
-    // --- NUEVO: Estado para el diálogo de "Ir a Ajustes" ---
     var showPermissionSettingsDialog by remember { mutableStateOf(false) }
 
     var tempDateMillis by remember { mutableStateOf<Long?>(null) }
     var currentMediaUri by remember { mutableStateOf<Uri?>(null) }
 
-    // --- LAUNCHERS DE PERMISOS INTELIGENTES ---
-
-    // Launcher genérico que detecta si se rechazó el permiso
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            Toast.makeText(context, "Permiso concedido. Intenta de nuevo.", Toast.LENGTH_SHORT).show()
-        } else {
-            // Si se rechaza (o ya se gastaron los 2 tokens), mostramos el botón de ir a ajustes
-            showPermissionSettingsDialog = true
-        }
+    // --- LAUNCHERS ---
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) Toast.makeText(context, "Permiso concedido. Intenta de nuevo.", Toast.LENGTH_SHORT).show()
+        else showPermissionSettingsDialog = true
     }
 
-    // Launcher específico para audio (usa la misma lógica)
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
+    val audioPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) showAudioRecorderDialog = true
         else showPermissionSettingsDialog = true
     }
 
-    // --- LAUNCHERS DE CONTENIDO ---
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && currentMediaUri != null) viewModel.addMediaItem(MediaItem(uri = currentMediaUri.toString(), mediaType = "IMAGE", description = "Foto"))
     }
@@ -93,7 +88,7 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
-            val flag = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(uri, flag)
             val type = context.contentResolver.getType(uri) ?: "image/jpeg"
             val mediaType = if (type.startsWith("video")) "VIDEO" else "IMAGE"
@@ -101,7 +96,7 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
         }
     }
 
-    // Permiso Notificaciones (Android 13+)
+    // Notificaciones (Android 13+)
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -111,40 +106,10 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
         }
     }
 
-    // --- LÓGICA DE DIÁLOGOS ---
-
-    // 1. Diálogo de Permisos Rechazados (Ir a Ajustes)
-    if (showPermissionSettingsDialog) {
-        AlertDialog(
-            onDismissRequest = { showPermissionSettingsDialog = false },
-            title = { Text("Permiso Necesario") },
-            text = { Text("Para usar esta función (Cámara/Microfono), necesitas activar los permisos manualmente en los Ajustes de la aplicación.") },
-            confirmButton = {
-                Button(onClick = {
-                    showPermissionSettingsDialog = false
-                    // INTENT MÁGICO: Manda al usuario directo a la pantalla de permisos de TU app
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                    }
-                    context.startActivity(intent)
-                }) {
-                    Text("Ir a Ajustes")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPermissionSettingsDialog = false }) { Text("Cancelar") }
-            }
-        )
-    }
-
-    // 2. Reproductor Interno
-    if (mediaToPlay != null) {
-        MediaPlayerDialog(uri = mediaToPlay!!.uri, mediaType = mediaToPlay!!.mediaType, onDismiss = { mediaToPlay = null })
-    }
-
-    // 3. Date/Time Pickers
+    // --- DIÁLOGOS DE FECHA Y HORA ---
     val datePickerState = rememberDatePickerState()
     val timePickerState = rememberTimePickerState()
+
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -152,6 +117,7 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") } }
         ) { DatePicker(state = datePickerState) }
     }
+
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
@@ -162,9 +128,17 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
                         val utcCalendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
                         utcCalendar.timeInMillis = tempDateMillis!!
                         calendar.set(utcCalendar.get(Calendar.YEAR), utcCalendar.get(Calendar.MONTH), utcCalendar.get(Calendar.DAY_OF_MONTH), timePickerState.hour, timePickerState.minute, 0)
-                        viewModel.updateTaskDueDate(calendar.timeInMillis)
+
+                        // LÓGICA SIMPLIFICADA: Todo es un recordatorio ahora
+                        if (isEditingReminder) {
+                            reminderBeingEdited?.let { viewModel.updateReminder(it, calendar.timeInMillis) }
+                        } else {
+                            viewModel.addReminder(calendar.timeInMillis)
+                        }
                     }
                     showTimePicker = false
+                    isEditingReminder = false
+                    reminderBeingEdited = null
                 }) { Text("Confirmar") }
             },
             dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancelar") } },
@@ -172,10 +146,55 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
         )
     }
 
+    // Opciones de Recordatorio
+    if (showReminderOptionsDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showReminderOptionsDialog = null },
+            title = { Text("Opciones") },
+            text = { Text("¿Qué deseas hacer con esta alarma?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    isEditingReminder = true
+                    reminderBeingEdited = showReminderOptionsDialog
+                    showReminderOptionsDialog = null
+                    showDatePicker = true
+                }) { Text("Editar Hora") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showReminderOptionsDialog?.let { viewModel.removeReminder(it) }
+                    showReminderOptionsDialog = null
+                }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
+            }
+        )
+    }
+
+    // Diálogo de Permisos
+    if (showPermissionSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionSettingsDialog = false },
+            title = { Text("Permiso Necesario") },
+            text = { Text("Activa los permisos manualmente en Ajustes para usar esta función.") },
+            confirmButton = {
+                Button(onClick = {
+                    showPermissionSettingsDialog = false
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) { Text("Ir a Ajustes") }
+            },
+            dismissButton = { TextButton(onClick = { showPermissionSettingsDialog = false }) { Text("Cancelar") } }
+        )
+    }
+
+    if (mediaToPlay != null) MediaPlayerDialog(uri = mediaToPlay!!.uri, mediaType = mediaToPlay!!.mediaType, onDismiss = { mediaToPlay = null })
+
     if (uiState.saveSuccessful) {
         LaunchedEffect(Unit) { viewModel.saveComplete(); navController.popBackStack() }
     }
 
+    // --- UI PRINCIPAL ---
     Scaffold(
         topBar = { TopAppBar(title = { Text("Crear Nota/Tarea", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)) },
         floatingActionButton = {
@@ -188,8 +207,7 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
 
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Tipo:", fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Tipo:", fontWeight = FontWeight.Bold); Spacer(modifier = Modifier.width(16.dp))
                     RadioButton(selected = !uiState.isTask, onClick = { viewModel.updateIsTask(false) }); Text("Nota")
                     Spacer(modifier = Modifier.width(8.dp))
                     RadioButton(selected = uiState.isTask, onClick = { viewModel.updateIsTask(true) }); Text("Tarea")
@@ -199,64 +217,96 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
             item { OutlinedTextField(value = uiState.title, onValueChange = viewModel::updateTitle, label = { Text("Título") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) }
             item { OutlinedTextField(value = uiState.description, onValueChange = viewModel::updateDescription, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth(), minLines = 3, shape = RoundedCornerShape(12.dp)) }
 
+            // --- SECCIÓN TAREA SIMPLIFICADA ---
             if (uiState.isTask) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Configuración de Tarea", fontWeight = FontWeight.Bold)
-                            OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Event, null); Spacer(modifier = Modifier.width(8.dp)); Text(uiState.taskDueDate?.let { dateFormatter.format(Date(it)) } ?: "Seleccionar Fecha y Hora") }
+
+                            // AHORA SOLO MOSTRAMOS LA LISTA DE ALARMAS
+                            Text("Recordatorios", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
                             Spacer(modifier = Modifier.height(8.dp))
+
+                            if (uiState.reminders.isEmpty()) {
+                                Text("Sin alarmas configuradas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                uiState.reminders.forEach { reminder ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                            .clickable { showReminderOptionsDialog = reminder }
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Alarm, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(dateFormatter.format(Date(reminder.timeInMillis)), modifier = Modifier.weight(1f))
+                                        Icon(Icons.Default.Edit, "Editar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                            }
+
+                            // Botón Agregar Alarma
+                            OutlinedButton(
+                                onClick = {
+                                    isEditingReminder = false
+                                    reminderBeingEdited = null
+                                    showDatePicker = true
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                            ) {
+                                Icon(Icons.Default.AddAlarm, null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Agregar Alarma")
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider()
+                            Spacer(modifier = Modifier.height(8.dp))
+
                             Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = uiState.isCompleted, onCheckedChange = viewModel::toggleCompletion); Text("Marcar como completada") }
                         }
                     }
                 }
             }
 
-            // BOTONES MULTIMEDIA (CON LÓGICA DE PERMISOS ACTUALIZADA)
             item {
                 Text("Adjuntar Multimedia:", fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
 
-                    // FOTO
                     SmallFloatingActionButton(onClick = {
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                             val file = createTempMediaFile(context, "IMAGE")
                             currentMediaUri = FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITY, file)
                             takePictureLauncher.launch(currentMediaUri!!)
-                        } else {
-                            // Si no tiene permiso, lo pide. Si ya fue denegado 2 veces, el launcher abrirá el diálogo
-                            permissionLauncher.launch(Manifest.permission.CAMERA)
-                        }
+                        } else permissionLauncher.launch(Manifest.permission.CAMERA)
                     }) { Icon(Icons.Default.PhotoCamera, "Foto") }
 
-                    // VIDEO
                     SmallFloatingActionButton(onClick = {
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                             val file = createTempMediaFile(context, "VIDEO")
                             currentMediaUri = FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITY, file)
                             captureVideoLauncher.launch(currentMediaUri!!)
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.CAMERA)
-                        }
+                        } else permissionLauncher.launch(Manifest.permission.CAMERA)
                     }) { Icon(Icons.Default.Videocam, "Video") }
 
-                    // AUDIO
                     SmallFloatingActionButton(onClick = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            showAudioRecorderDialog = true
-                        } else {
-                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) showAudioRecorderDialog = true
+                        else audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }) { Icon(Icons.Default.Mic, "Audio") }
 
-                    // GALERÍA (No suele necesitar "Ir a ajustes" en versiones nuevas, pero usa el launcher estándar)
                     SmallFloatingActionButton(onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) { Icon(Icons.Default.Image, "Galería") }
                 }
             }
 
             if (uiState.mediaFiles.isNotEmpty()) {
                 items(uiState.mediaFiles) { media ->
-                    AttachmentItemComponent(media, { viewModel.deleteMedia(media) }, { if (media.mediaType == "IMAGE") openMediaFile(context, media) else mediaToPlay = media })
+                    AttachmentItemComponent(
+                        mediaItem = media,
+                        onDelete = { viewModel.deleteMedia(media) },
+                        onClick = { if (media.mediaType == "IMAGE") openMediaFile(context, media) else mediaToPlay = media }
+                    )
                 }
             }
             item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -265,11 +315,18 @@ fun AddNoteScreen(navController: NavHostController, factory: AddEditViewModelFac
 
     if (showAudioRecorderDialog) {
         val recorder = remember { AndroidAudioRecorder(context) }
-        AudioRecorderDialog(onDismiss = { showAudioRecorderDialog = false }, onSave = { f -> viewModel.addMediaItem(MediaItem(uri = f.absolutePath, mediaType = "AUDIO", description = "Audio")); showAudioRecorderDialog = false }, audioRecorder = recorder)
+        AudioRecorderDialog(
+            onDismiss = { showAudioRecorderDialog = false },
+            onSave = { f ->
+                viewModel.addMediaItem(MediaItem(uri = f.absolutePath, mediaType = "AUDIO", description = "Audio grabado"))
+                showAudioRecorderDialog = false
+            },
+            audioRecorder = recorder
+        )
     }
 }
 
-// --- FUNCIONES AUXILIARES ---
+// --- UTILIDADES ---
 private fun createTempMediaFile(context: Context, type: String): File {
     val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
     val dir = if (type == "IMAGE") Environment.DIRECTORY_PICTURES else Environment.DIRECTORY_MOVIES

@@ -27,7 +27,7 @@ import androidx.navigation.NavController
 import com.jqlqapa.appnotas.ui.navigation.AppScreens
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModel
 import com.jqlqapa.appnotas.ui.viewmodel.NoteTab
-import com.jqlqapa.appnotas.data.model.NoteEntity
+import com.jqlqapa.appnotas.data.model.NoteWithMediaAndReminders // <--- CAMBIO IMPORTANTE
 import com.jqlqapa.appnotas.data.AppDataContainer
 import com.jqlqapa.appnotas.ui.viewmodel.HomeUiState
 import java.text.SimpleDateFormat
@@ -35,7 +35,7 @@ import java.util.*
 
 private val dateFormatter = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
-// Definición de colores para adaptabilidad
+// Definición de colores para adaptabilidad (TUS COLORES ORIGINALES)
 val phonePrimary = Color(0xFF4CAF50) // Verde
 val tabletPrimary = Color(0xFF9C27B0) // Morado
 
@@ -133,8 +133,8 @@ fun TabletLayout(
     uiState: HomeUiState,
     viewModel: HomeViewModel,
     onNoteClick: (Long) -> Unit,
-    onToggleCompletion: (NoteEntity) -> Unit,
-    onDelete: (NoteEntity) -> Unit,
+    onToggleCompletion: (NoteWithMediaAndReminders) -> Unit, // CAMBIO DE TIPO
+    onDelete: (NoteWithMediaAndReminders) -> Unit, // CAMBIO DE TIPO
     onEditClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -168,12 +168,12 @@ fun TabletLayout(
         Box(modifier = Modifier.weight(0.6f).fillMaxHeight()) {
             val selectedNoteId = uiState.selectedNoteId
             if (selectedNoteId != null) {
-                // CORRECCIÓN: Usamos el componente compartido y pasamos onDeleteConfirmed
-                NoteDetailContent(
+                // Usamos el componente compartido
+                com.jqlqapa.appnotas.ui.screens.NoteDetailContent(
                     noteId = selectedNoteId,
                     modifier = Modifier.fillMaxSize(),
                     onEditClick = { onEditClick(selectedNoteId) },
-                    onDeleteConfirmed = { viewModel.clearSelection() } // <--- ESTO FALTABA
+                    onDeleteConfirmed = { viewModel.clearSelection() }
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -189,10 +189,10 @@ fun TabletLayout(
 // ----------------------------------------------------
 @Composable
 fun NoteTaskList(
-    notes: List<NoteEntity>,
+    notes: List<NoteWithMediaAndReminders>, // CAMBIO DE TIPO: Recibe el objeto completo
     onNoteClick: (Long) -> Unit,
-    onToggleCompletion: (NoteEntity) -> Unit,
-    onDelete: (NoteEntity) -> Unit,
+    onToggleCompletion: (NoteWithMediaAndReminders) -> Unit,
+    onDelete: (NoteWithMediaAndReminders) -> Unit,
     selectedNoteId: Long? = null
 ) {
     LazyColumn(
@@ -200,13 +200,13 @@ fun NoteTaskList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(notes, key = { it.id }) { note ->
+        items(notes, key = { it.note.id }) { item ->
             NoteCard(
-                note = note,
-                onClick = { onNoteClick(note.id) },
-                onToggleCompletion = { onToggleCompletion(note) },
-                onDelete = { onDelete(note) },
-                isSelected = note.id == selectedNoteId
+                item = item, // Pasamos el ITEM completo
+                onClick = { onNoteClick(item.note.id) },
+                onToggleCompletion = { onToggleCompletion(item) },
+                onDelete = { onDelete(item) },
+                isSelected = item.note.id == selectedNoteId
             )
         }
     }
@@ -214,37 +214,93 @@ fun NoteTaskList(
 
 @Composable
 fun NoteCard(
-    note: NoteEntity,
+    item: NoteWithMediaAndReminders, // CAMBIO: Recibimos el objeto complejo
     onClick: () -> Unit,
     onToggleCompletion: () -> Unit,
     onDelete: () -> Unit,
     isSelected: Boolean = false
 ) {
+    // Desestructuramos para facilitar el uso
+    val note = item.note
+    val media = item.media
+    val reminders = item.reminders
+
+    // Calculamos contadores
+    val imgCount = media.count { it.mediaType == "IMAGE" }
+    val vidCount = media.count { it.mediaType == "VIDEO" }
+    val audCount = media.count { it.mediaType == "AUDIO" }
+    val remCount = reminders.size
+
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(if (isSelected) 4.dp else 2.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Fila Superior (Título y Acciones)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 val titleStyle = if (note.isTask && note.isCompleted) TextStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray) else LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface)
-                Text(text = note.title, style = titleStyle.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = note.description.take(50) + if (note.description.length > 50) "..." else "", color = Color.DarkGray, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (note.isTask && note.taskDueDate != null) {
-                    Text(text = "Vence: ${dateFormatter.format(Date(note.taskDueDate))}", color = MaterialTheme.colorScheme.secondary, fontSize = 12.sp)
+
+                Text(
+                    text = note.title,
+                    style = titleStyle.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (note.isTask) Checkbox(checked = note.isCompleted, onCheckedChange = { onToggleCompletion() })
+                    IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red.copy(alpha = 0.7f)) }
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            if (note.isTask) Checkbox(checked = note.isCompleted, onCheckedChange = { onToggleCompletion() })
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red.copy(alpha = 0.7f)) }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Descripción
+            Text(text = note.description.take(50) + if (note.description.length > 50) "..." else "", color = Color.DarkGray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+
+            // --- NUEVA SECCIÓN DE INFORMACIÓN (ICONOS) ---
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Multimedia
+                if (imgCount > 0) MiniInfoChip(Icons.Default.Image, "$imgCount")
+                if (vidCount > 0) MiniInfoChip(Icons.Default.Videocam, "$vidCount")
+                if (audCount > 0) MiniInfoChip(Icons.Default.Mic, "$audCount")
+
+                // Tareas
+                if (note.isTask) {
+                    if (remCount > 0) MiniInfoChip(Icons.Default.Alarm, "$remCount", MaterialTheme.colorScheme.primary)
+
+                    // Fecha alineada a la derecha si hay espacio, o seguida
+                    if (note.taskDueDate != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = dateFormatter.format(Date(note.taskDueDate)),
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+// Componente auxiliar para los iconos pequeños (Mantiene tu estilo)
+@Composable
+fun MiniInfoChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, tint: Color = Color.Gray) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+        Icon(icon, null, modifier = Modifier.size(14.dp), tint = tint)
+        Spacer(modifier = Modifier.width(2.dp))
+        Text(text, fontSize = 12.sp, color = tint)
+    }
+}
+
 // ----------------------------------------------------
-// COMPONENTES UI
+// COMPONENTES UI (Barra Superior y Tabs - Intactos)
 // ----------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -19,17 +19,17 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.jqleapa.appnotas.ui.screens.GalleryScreen
 import com.jqleapa.appnotas.ui.screens.ReminderScreen
-import com.jqleapa.appnotas.ui.screens.SearchScreen
+
 
 // --- IMPORTS CORREGIDOS (Todo unificado a 'jqlqapa') ---
 import com.jqlqapa.appnotas.ui.screens.HomeScreen // <--- IMPORTANTE: La pantalla real
-import com.jqlqapa.appnotas.ui.screens.CameraCaptureScreen
 import com.jqlqapa.appnotas.ui.screens.EditNoteScreen
 import com.jqlqapa.appnotas.ui.screens.NoteDetailScreen
 
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModel
 import com.jqlqapa.appnotas.data.NoteRepository
 import com.jqlqapa.appnotas.ui.screens.AddNoteScreen
+import com.jqlqapa.appnotas.ui.screens.SearchScreen
 import com.jqlqapa.appnotas.ui.viewmodel.AddEditViewModelFactory
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModelFactory
 
@@ -110,9 +110,6 @@ fun AppNavigation(
             composable(AppScreens.Reminder.route) { ReminderScreen(navController = navController) }
             composable(AppScreens.Search.route) { SearchScreen(navController = navController) }
 
-            composable(AppScreens.Camera.route) {
-                CameraCaptureScreen(viewModel = homeViewModelFactory.create(HomeViewModel::class.java))
-            }
             composable(AppScreens.Gallery.route) {
                 GalleryScreen(viewModel = homeViewModelFactory.create(HomeViewModel::class.java))
             }

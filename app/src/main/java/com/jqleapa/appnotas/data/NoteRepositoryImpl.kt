@@ -49,6 +49,10 @@ class NoteRepositoryImpl(
         }
     }
 
+    // ...
+    override fun obtenerNotasConDetalles() = noteDao.getNotesWithDetails()
+    override fun obtenerTareasConDetalles() = noteDao.getTasksWithDetails()
+
     override fun obtenerNotas(): Flow<List<NoteEntity>> = noteDao.getAllNotesByRegistrationDate()
 
     override fun obtenerTareas(): Flow<List<NoteEntity>> = noteDao.getAllTasksByDueDate()

@@ -1,36 +1,60 @@
 package com.jqlqapa.appnotas.receivers
 
+import android.Manifest
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
-// import com.jqlqapa.appnotas.R // Comentado temporalmente para usar icono de sistema seguro
+import androidx.core.content.ContextCompat
 
 class AlarmasReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // 1. PRUEBA DE FUEGO: Si ves este Toast, el sistema de alarmas FUNCIONA.
-        Toast.makeText(context, "¡ALARMA RECIBIDA!", Toast.LENGTH_LONG).show()
+        Log.d("AppNotasAlarm", "🚨 RECEIVER ACTIVADO: El sistema despertó a la app.")
 
         val message = intent.getStringExtra("EXTRA_MESSAGE") ?: "Tienes una tarea pendiente"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Usamos un icono del sistema (android.R.drawable...) para descartar errores de recursos propios
+        // 1. Verificar si el Canal de Notificaciones existe
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = notificationManager.getNotificationChannel("CHANNEL_ID_NOTAS")
+            if (channel == null) {
+                Log.e("AppNotasAlarm", "ERROR FATAL: El canal 'CHANNEL_ID_NOTAS' no existe. Revisa AppNotasApplication.")
+                return
+            } else {
+                Log.d("AppNotasAlarm", "Canal encontrado. Importancia: ${channel.importance}")
+                if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                    Log.e("AppNotasAlarm", "El usuario tiene el canal SILENCIADO/BLOQUEADO en Ajustes.")
+                    return
+                }
+            }
+        }
+
+        // 2. Verificar Permiso de Notificaciones (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.e("AppNotasAlarm", "PERMISO DENEGADO: No tienes permiso POST_NOTIFICATIONS.")
+                return
+            }
+        }
+
+        // 3. Construir y Lanzar
         val notification = NotificationCompat.Builder(context, "CHANNEL_ID_NOTAS")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Recordatorio de Tarea")
+            .setSmallIcon(android.R.drawable.ic_dialog_info) // Icono seguro del sistema
+            .setContentTitle("Recordatorio AppNotas")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_ALL) // Sonido y vibración por defecto
             .setAutoCancel(true)
             .build()
 
         try {
             notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+            Log.d("AppNotasAlarm", "NOTIFICACIÓN ENVIADA AL SISTEMA VISUALMENTE")
         } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "Error al mostrar notificación: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("AppNotasAlarm", "Excepción al notificar: ${e.message}")
         }
     }
 }

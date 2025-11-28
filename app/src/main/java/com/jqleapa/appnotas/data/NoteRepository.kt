@@ -41,6 +41,10 @@ interface NoteRepository {
     // Búsqueda (requerido para SearchViewModel)
     fun searchNotesAndTasks(query: String): Flow<List<NoteEntity>>
 
+    // ...
+    fun obtenerNotasConDetalles(): Flow<List<NoteWithMediaAndReminders>>
+    fun obtenerTareasConDetalles(): Flow<List<NoteWithMediaAndReminders>>
+
     // --- MULTIMEDIA (Requerido por Add/Edit y Home ViewModels) ---
     fun getAllMedia(): Flow<List<MediaEntity>>
     suspend fun addMedia(media: MediaEntity)
@@ -49,4 +53,6 @@ interface NoteRepository {
     // --- RECORDATORIOS (Requerido por Add/Edit ViewModels) ---
     suspend fun addReminder(reminder: ReminderEntity): Long
     suspend fun deleteReminder(reminder: ReminderEntity)
+
+
 }
