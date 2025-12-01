@@ -2,6 +2,7 @@ package com.jqlqapa.appnotas.receivers
 
 import android.Manifest
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,51 +11,54 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.jqlqapa.appnotas.MainActivity // Asegúrate de importar tu MainActivity
 
 class AlarmasReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d("AppNotasAlarm", "🚨 RECEIVER ACTIVADO: El sistema despertó a la app.")
+        Log.d("AppNotasAlarm", "🚨 RECEIVER ACTIVADO")
 
-        val message = intent.getStringExtra("EXTRA_MESSAGE") ?: "Tienes una tarea pendiente"
+        val message = intent.getStringExtra("EXTRA_MESSAGE") ?: "Tarea pendiente"
+        // [NUEVO] Recuperamos el ID de la nota
+        val noteId = intent.getLongExtra("EXTRA_NOTE_ID", -1L)
+
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // 1. Verificar si el Canal de Notificaciones existe
+        // --- CREAR ACCIÓN AL TOCAR (TAP) ---
+        val tapIntent = Intent(context, MainActivity::class.java).apply {
+            // Estos flags limpian la pila para abrir la nota fresca y evitar errores de navegación
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("nav_to_note_id", noteId) // Pasamos el ID a la Activity
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            noteId.toInt(), // RequestCode único
+            tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        // -----------------------------------
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = notificationManager.getNotificationChannel("CHANNEL_ID_NOTAS")
-            if (channel == null) {
-                Log.e("AppNotasAlarm", "ERROR FATAL: El canal 'CHANNEL_ID_NOTAS' no existe. Revisa AppNotasApplication.")
-                return
-            } else {
-                Log.d("AppNotasAlarm", "Canal encontrado. Importancia: ${channel.importance}")
-                if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
-                    Log.e("AppNotasAlarm", "El usuario tiene el canal SILENCIADO/BLOQUEADO en Ajustes.")
-                    return
-                }
-            }
+            if (notificationManager.getNotificationChannel("CHANNEL_ID_NOTAS") == null) return
         }
 
-        // 2. Verificar Permiso de Notificaciones (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                Log.e("AppNotasAlarm", "PERMISO DENEGADO: No tienes permiso POST_NOTIFICATIONS.")
-                return
-            }
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         }
 
-        // 3. Construir y Lanzar
         val notification = NotificationCompat.Builder(context, "CHANNEL_ID_NOTAS")
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Icono seguro del sistema
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Recordatorio AppNotas")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
+            .setContentIntent(pendingIntent) // <--- AQUÍ VINCULAMOS EL TAP
+            .setAutoCancel(true) // Se borra al tocarla
             .build()
 
         try {
             notificationManager.notify(System.currentTimeMillis().toInt(), notification)
-            Log.d("AppNotasAlarm", "NOTIFICACIÓN ENVIADA AL SISTEMA VISUALMENTE")
         } catch (e: Exception) {
-            Log.e("AppNotasAlarm", "Excepción al notificar: ${e.message}")
+            e.printStackTrace()
         }
     }
 }

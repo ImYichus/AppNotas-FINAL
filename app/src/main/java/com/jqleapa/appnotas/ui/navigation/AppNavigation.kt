@@ -5,7 +5,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue // <--- IMPORTANTE para que funcione 'by'
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -20,18 +21,12 @@ import androidx.navigation.navArgument
 import com.jqleapa.appnotas.ui.screens.GalleryScreen
 import com.jqleapa.appnotas.ui.screens.ReminderScreen
 
-
-// --- IMPORTS CORREGIDOS (Todo unificado a 'jqlqapa') ---
-import com.jqlqapa.appnotas.ui.screens.HomeScreen // <--- IMPORTANTE: La pantalla real
-import com.jqlqapa.appnotas.ui.screens.EditNoteScreen
-import com.jqlqapa.appnotas.ui.screens.NoteDetailScreen
-
+// Importaciones de todas tus pantallas y viewmodels (usando el paquete correcto)
+import com.jqlqapa.appnotas.ui.screens.*
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModel
-import com.jqlqapa.appnotas.data.NoteRepository
-import com.jqlqapa.appnotas.ui.screens.AddNoteScreen
-import com.jqlqapa.appnotas.ui.screens.SearchScreen
-import com.jqlqapa.appnotas.ui.viewmodel.AddEditViewModelFactory
 import com.jqlqapa.appnotas.ui.viewmodel.HomeViewModelFactory
+import com.jqlqapa.appnotas.ui.viewmodel.AddEditViewModelFactory
+import com.jqlqapa.appnotas.data.NoteRepository
 
 const val NOTE_ID_ARG = "noteId"
 
@@ -91,12 +86,13 @@ fun AppBottomNavigationBar(navController: NavHostController) {
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
-    noteRepository: NoteRepository
+    noteRepository: NoteRepository,
+    startDestinationId: Long? = null
 ) {
     val context = LocalContext.current
 
-    val homeViewModelFactory = remember { HomeViewModelFactory(noteRepository = noteRepository) }
-    val addEditViewModelFactory = remember { AddEditViewModelFactory(noteRepository = noteRepository, context = context) }
+    val homeViewModelFactory = remember { HomeViewModelFactory(noteRepository) }
+    val addEditViewModelFactory = remember { AddEditViewModelFactory(noteRepository, context) }
 
     Scaffold(
         bottomBar = { AppBottomNavigationBar(navController = navController) }
@@ -106,16 +102,22 @@ fun AppNavigation(
             startDestination = AppScreens.Home.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            // Pantallas principales
             composable(AppScreens.Home.route) { HomeScreen(navController) }
-            composable(AppScreens.Reminder.route) { ReminderScreen(navController = navController) }
-            composable(AppScreens.Search.route) { SearchScreen(navController = navController) }
+            composable(AppScreens.Reminder.route) { ReminderScreen(navController) }
+
+            // Pantallas secundarias
+            composable(AppScreens.Search.route) { SearchScreen(navController) }
 
             composable(AppScreens.Gallery.route) {
                 GalleryScreen(viewModel = homeViewModelFactory.create(HomeViewModel::class.java))
             }
+
+            // Notas (CRUD)
             composable(AppScreens.AddNote.route) {
-                AddNoteScreen(navController = navController, factory = addEditViewModelFactory)
+                AddNoteScreen(navController, addEditViewModelFactory)
             }
+
             composable(
                 route = AppScreens.NoteDetail.route,
                 arguments = listOf(navArgument(NOTE_ID_ARG) { type = NavType.LongType })
@@ -124,15 +126,24 @@ fun AppNavigation(
                 requireNotNull(noteId)
                 NoteDetailScreen(noteId = noteId, navController = navController)
             }
+
             composable(
                 route = AppScreens.EditNote.route,
                 arguments = listOf(navArgument(NOTE_ID_ARG) { type = NavType.LongType })
             ) { backStackEntry ->
                 val noteId = backStackEntry.arguments?.getLong(NOTE_ID_ARG)
                 requireNotNull(noteId)
+                // Creamos la factory específica para este ID
                 val editFactory = AddEditViewModelFactory(noteRepository, context, noteId)
-                EditNoteScreen(navController = navController, factory = editFactory, noteId = noteId)
+                EditNoteScreen(navController, editFactory, noteId)
             }
+        }
+    }
+
+    // Manejo de navegación automática desde notificación
+    LaunchedEffect(startDestinationId) {
+        if (startDestinationId != null) {
+            navController.navigate(AppScreens.NoteDetail.withArgs(startDestinationId.toString()))
         }
     }
 }

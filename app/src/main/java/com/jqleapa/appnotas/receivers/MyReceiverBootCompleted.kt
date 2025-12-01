@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 class MyReceiverBootCompleted : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.d("AppNotasBoot", "⚡ RECIBIDO: Evento de arranque del sistema.")
+            Log.d("AppNotasBoot", "RECIBIDO: Evento de arranque del sistema.")
 
             // 1. Inicializar DB por seguridad
             try {

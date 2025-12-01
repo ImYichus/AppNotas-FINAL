@@ -17,64 +17,42 @@ class AlarmScheduler(private val context: Context) {
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     fun schedule(reminder: ReminderEntity, message: String) {
-        // 1. HACER EL INTENT ÚNICO
-        // Agregamos 'data' con el ID. Esto diferencia los Intents para Android.
         val intent = Intent(context, AlarmasReceiver::class.java).apply {
             putExtra("EXTRA_MESSAGE", message)
             putExtra("EXTRA_REMINDER_ID", reminder.id)
-            // ESTA LÍNEA ES LA MAGIA: Hace que cada Intent sea único
+            // [NUEVO] Pasamos el ID de la nota para poder abrirla luego
+            putExtra("EXTRA_NOTE_ID", reminder.noteId)
             data = Uri.parse("content://reminders/${reminder.id}")
         }
 
-        // 2. CREAR EL PENDING INTENT
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            reminder.id.toInt(), // El RequestCode también debe ser único
+            reminder.id.toInt(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val date = Date(reminder.reminderDateTime)
-        Log.d("AppNotasAlarm", "Intentando programar ID:${reminder.id} para: $date")
-
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        reminder.reminderDateTime,
-                        pendingIntent
-                    )
-                    Log.d("AppNotasAlarm", "Alarma EXACTA programada (ID: ${reminder.id})")
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.reminderDateTime, pendingIntent)
+                    Log.d("AppNotasAlarm", "Alarma EXACTA: ID ${reminder.id}")
                 } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        reminder.reminderDateTime,
-                        pendingIntent
-                    )
-                    Log.w("AppNotasAlarm", "Alarma INEXACTA programada (Falta permiso)")
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.reminderDateTime, pendingIntent)
                 }
             } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    reminder.reminderDateTime,
-                    pendingIntent
-                )
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.reminderDateTime, pendingIntent)
             }
-        } catch (e: SecurityException) {
-            Log.e("AppNotasAlarm", "ERROR SEGURIDAD: ${e.message}")
         } catch (e: Exception) {
-            Log.e("AppNotasAlarm", "ERROR: ${e.message}")
+            e.printStackTrace()
         }
     }
 
     fun cancel(reminder: ReminderEntity) {
         try {
-            // Para cancelar, el Intent debe ser IDÉNTICO al que creamos (incluyendo el data)
             val intent = Intent(context, AlarmasReceiver::class.java).apply {
                 data = Uri.parse("content://reminders/${reminder.id}")
             }
-
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
                 reminder.id.toInt(),
@@ -82,9 +60,6 @@ class AlarmScheduler(private val context: Context) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             alarmManager.cancel(pendingIntent)
-            Log.d("AppNotasAlarm", "Alarma cancelada: ID ${reminder.id}")
-        } catch (e: Exception) {
-            Log.e("AppNotasAlarm", "Error cancelando: ${e.message}")
-        }
+        } catch (e: Exception) { }
     }
 }
